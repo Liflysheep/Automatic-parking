@@ -1,4 +1,4 @@
-1.使用前要cd到auto_parking目录下source
+1.第一次使用要在auto_parking目录下通过colcon build进行编译。每次使用前要cd到auto_parking目录下source。
 2.编写了两个.launch.py，分别用于启动rviz2和建立了世界的gazebo.可以通过下命令启动导入了无人机的rviz2和gazebo。
 ```bash
 ros2 launch rosmaster_x3 display_gazebo.launch.py
