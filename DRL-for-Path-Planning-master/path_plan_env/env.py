@@ -25,14 +25,17 @@ __all__ = ["DynamicPathPlanning", "StaticPathPlanning", "NormalizedActionsWrappe
 
 #----------------------------- ↓↓↓↓↓ 地图设置 ↓↓↓↓↓ ------------------------------#
 class MAP:
-    size = [[-10.0, -10.0], [10.0, 10.0]] # x, z最小值; x, z最大值
-    start_pos = [0, -9]                   # 起点坐标
-    end_pos = [2.5, 9]                    # 终点坐标
+    size = [[-10.0, -5.0], [10.0, 2.5]] # x, z最小值; x, z最大值
+    start_pos = [7.5, -2]                   # 起点坐标
+    end_pos = [0, 1]                    # 终点坐标
     obstacles = [                         # 障碍物, 要求为 geo.Polygon 或 带buffer的 geo.Point/geo.LineString
-        geo.Point(0, 2.5).buffer(4),
-        geo.Point(-6, -5).buffer(3),
-        geo.Point(6, -5).buffer(3),
-        geo.Polygon([(-10, 0), (-10, 5), (-7.5, 5), (-7.5, 0)])
+        geo.Polygon([(-10, 0), (-9.9, 0), (-9.9, -5), (-10, -5)]),
+        geo.Polygon([(10, 0), (9.9, 0), (9.9, -5), (10, -5)]),
+        geo.Polygon([(-9.9, -4.9), (-9.9, -5), (9.9, -5), (9.9, -4.9)]),
+        geo.Polygon([(-10, 2.5), (-10, 2), (10, 2), (10, 2.5)]),
+        geo.Polygon([(-7, 2), (-7, 0), (-3, 0), (-3, 2)]),
+        geo.Polygon([(-10, 2), (-10, 0), (-3, 0), (-3, 2)]),
+        geo.Polygon([(10, 2), (10, 0), (3, 0), (3, 2)])
     ]
 
     @classmethod
@@ -124,7 +127,9 @@ class DynamicPathPlanning(gym.Env):
         self.log = Logger()
         # 障碍 + 雷达
         self.obstacles = MAP.obstacles
+        '''雷达接口'''
         self.lidar = LidarModel(SCAN_RANGE, SCAN_ANGLE, SCAN_NUM)
+        ''''''
         self.lidar.add_obstacles(MAP.obstacles)
         # 状态空间 + 控制空间
         self.state_space = spaces.Box(np.array(STATE_LOW), np.array(STATE_HIGH))

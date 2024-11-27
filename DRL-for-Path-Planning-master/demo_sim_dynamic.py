@@ -21,10 +21,10 @@ policy = ort.InferenceSession("./path_plan_env/policy_dynamic.onnx")
 # 3.仿真LOOP
 from copy import deepcopy
 
-MAX_EPISODE = 5
+MAX_EPISODE = 3
 for episode in range(MAX_EPISODE):
     ## 获取初始观测
-    obs = env.reset()
+    obs = env.reset(mode=1)
     ## 进行一回合仿真
     for steps in range(env.max_episode_steps):
         # 可视化
