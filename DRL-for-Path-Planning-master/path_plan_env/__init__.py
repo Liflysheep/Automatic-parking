@@ -1,5 +1,5 @@
 # 路径规划环境
-from .env import DynamicPathPlanning, StaticPathPlanning, NormalizedActionsWrapper
+from .env import DynamicPathPlanning, StaticPathPlanning, NormalizedActionsWrapper, ParallelParkingEnv
 from .lidar_sim import LidarModel
 
 __all__ = [
@@ -7,4 +7,6 @@ __all__ = [
     "StaticPathPlanning",
     "NormalizedActionsWrapper",
     "LidarModel",
+    "ParallelParkingEnv"
 ]
+

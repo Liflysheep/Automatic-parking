@@ -534,12 +534,68 @@ class DynamicPathPlanning(gym.Env):
         ψ = cls._limit_angle(ψ)
         return np.array([x, z, V, ψ], dtype=np.float32) # deepcopy
 
-    
+# 修改后的侧方停车环境
+class ParallelParkingEnv(DynamicPathPlanning):
+    """侧方停车任务的环境"""
 
+    def __init__(self, max_episode_steps=300, dt=0.5, normalize_observation=True, old_gym_style=True):
+        super().__init__(max_episode_steps, dt, normalize_observation, old_gym_style)
+        self.vehicle_length = 4.5  # 车辆长度
+        self.vehicle_width = 2.0  # 车辆宽度
+        self.parking_spot = [(-3, -1), (-3, -3), (-7, -3), (-7, -1)]  # 停车位的顶点
+        self.vehicle_shape = None  # 车辆的当前形状
+        self._update_vehicle_shape()
 
+    def reset(self):
+        """重置环境，初始化车辆位置和停车位"""
+        super().reset(mode=1)
+        self.state[2] = 0.0  # 初始速度为0
+        self.state[3] = 0.0  # 初始方向为0
+        self._update_vehicle_shape()
+        obs = self._get_obs(self.state)
+        return self._norm_obs(obs), {}
 
+    def step(self, act):
+        """更新车辆状态和位置"""
+        obs, rew, done, truncated, info = super().step(act)
+        self._update_vehicle_shape()
+        # 计算是否停车成功
+        if not done and not truncated:
+            if self._check_parking_success():
+                rew += 100.0
+                done = True
+                info['state'] = 'success'
+        return obs, rew, done, truncated, info
 
+    def _update_vehicle_shape(self):
+        """更新车辆的形状（矩形表示）"""
+        x, z, _, ψ = self.state
+        corners = self._get_vehicle_corners(x, z, ψ)
+        self.vehicle_shape = geo.Polygon(corners)
 
+    def _get_vehicle_corners(self, x, z, ψ):
+        """根据车辆位置和朝向计算四个角的坐标"""
+        L, W = self.vehicle_length, self.vehicle_width
+        dx = np.array([L / 2, L / 2, -L / 2, -L / 2])
+        dz = np.array([W / 2, -W / 2, -W / 2, W / 2])
+        corners = np.stack([dx, dz], axis=1)
+        rotation = np.array([[np.cos(ψ), -np.sin(ψ)], [np.sin(ψ), np.cos(ψ)]])
+        rotated = np.dot(corners, rotation.T)
+        return [(x + p[0], z + p[1]) for p in rotated]
+
+    def _check_parking_success(self):
+        """判断车辆是否成功停入停车位"""
+        parking_polygon = geo.Polygon(self.parking_spot)
+        return parking_polygon.contains(self.vehicle_shape)
+
+    def render(self, mode="human", figsize=[8, 8]):
+        """可视化环境"""
+        super().render(mode, figsize)
+        ax = plt.gca()
+        parking_polygon = geo.Polygon(self.parking_spot)
+        plot_polygon(parking_polygon, ax=ax, facecolor='none', edgecolor='b', linewidth=2, linestyle='--')
+        if self.vehicle_shape:
+            plot_polygon(self.vehicle_shape, ax=ax, facecolor='r', edgecolor='r')
 
 
 '''------------------------↑↑↑↑↑ 动态避障环境 ↑↑↑↑↑---------------------------
