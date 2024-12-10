@@ -18,6 +18,7 @@ from collections import deque
 from scipy.integrate import odeint
 from shapely import geometry as geo
 from shapely.plotting import plot_polygon
+from matplotlib.patches import Rectangle, Polygon
 
 __all__ = ["DynamicPathPlanning", "StaticPathPlanning", "NormalizedActionsWrapper"]
 
@@ -27,7 +28,7 @@ __all__ = ["DynamicPathPlanning", "StaticPathPlanning", "NormalizedActionsWrappe
 class MAP:
     size = [[-10.0, -5.0], [10.0, 2.5]] # x, z最小值; x, z最大值
     start_pos = [7.5, -2]                   # 起点坐标
-    end_pos = [0, 1]                    # 终点坐标
+    end_pos = [0, 0.5]                   # 终点坐标
     obstacles = [                         # 障碍物, 要求为 geo.Polygon 或 带buffer的 geo.Point/geo.LineString
         geo.Polygon([(-10, 0), (-9.9, 0), (-9.9, -5), (-10, -5)]),
         geo.Polygon([(10, 0), (9.9, 0), (9.9, -5), (10, -5)]),
@@ -60,7 +61,7 @@ class MAP:
         ax.set_ylabel("z")
         ax.grid(alpha=0.3, ls=':')
         ax.set_xlim(cls.size[0][0], cls.size[1][0])
-        ax.set_ylim(cls.size[0][1], cls.size[1][1])
+        ax.set_ylim(cls.size[1][1], cls.size[0][1])
         ax.invert_yaxis()
         for o in cls.obstacles:
             plot_polygon(o, ax=ax, facecolor='w', edgecolor='k', add_points=False)
@@ -97,7 +98,7 @@ SCAN_ANGLE = 128 # 扫描范围(单位deg)
 SCAN_NUM = 128   # 扫描点个数
 SCAN_CEN = 48    # 中心区域index开始位置(小于SCAN_NUM/2)
 # 距离设置
-D_SAFE = 0.5 # 碰撞半径
+D_SAFE = 1.5 # 碰撞半径
 D_BUFF = 1.0 # 缓冲距离(大于D_SAFE)
 D_ERR = 0.5  # 目标误差距离
 # 序列观测长度
@@ -127,9 +128,7 @@ class DynamicPathPlanning(gym.Env):
         self.log = Logger()
         # 障碍 + 雷达
         self.obstacles = MAP.obstacles
-        '''雷达接口'''
         self.lidar = LidarModel(SCAN_RANGE, SCAN_ANGLE, SCAN_NUM)
-        ''''''
         self.lidar.add_obstacles(MAP.obstacles)
         # 状态空间 + 控制空间
         self.state_space = spaces.Box(np.array(STATE_LOW), np.array(STATE_HIGH))
@@ -147,6 +146,7 @@ class DynamicPathPlanning(gym.Env):
         self.__need_reset = True
         self.__norm_observation = normalize_observation
         self.__old_gym = old_gym_style
+        self.car_length, self.car_width = 2, 1.4
         # plt设置
         plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
         plt.rcParams['axes.unicode_minus'] = False
@@ -195,6 +195,7 @@ class DynamicPathPlanning(gym.Env):
         self.log.yaw = [self.state[3]]            # 偏角
         self.log.length = [[self.L, self.D_last]] # 航程+距离
         self.log.curr_scan_pos = []               # 当前时刻扫描的障碍坐标
+        self.log.car_leftup = [[self.start_pos[0] - (self.car_length/2), self.start_pos[1] - (self.car_width/2)]]
         # 输出
         if self.__old_gym:
             return self._norm_obs(obs)
@@ -338,6 +339,10 @@ class DynamicPathPlanning(gym.Env):
         info["distance"] = self.D_last
         # 记录
         self.log.path.append(self.state[:2])
+        self.log.car_leftup.append(np.array(
+            [self.log.car_leftup[-1][0]+self.log.path[-1][0]-self.log.path[-2][0], 
+             self.log.car_leftup[-1][1]+self.log.path[-1][1]-self.log.path[-2][1]]
+             , dtype=np.float32))
         self.log.ctrl.append(u)
         self.log.speed.append(self.state[2])
         self.log.yaw.append(self.state[3])
@@ -362,6 +367,7 @@ class DynamicPathPlanning(gym.Env):
     def render(self, mode="human", figsize=[8,8]):
         """测试时可视化环境, 和step交替调用 (不要和plot一起调用, 容易卡)"""
         assert not self.__need_reset, "调用render前必须先reset"
+        
         # 创建绘图窗口
         if self.__render_not_called:
             self.__render_not_called = False
@@ -370,24 +376,73 @@ class DynamicPathPlanning(gym.Env):
             ax = fig.add_axes([0.1, 0.1, 0.8, 0.8])
             MAP.plot(ax, "Path Plan Environment")
             self.__plt_car_path, = ax.plot([], [], 'k-.')
-            self.__plt_car_point = ax.scatter([], [], s=15, c='b',  marker='o', label='Agent')
+            self.__plt_car_point = ax.scatter([], [], s=15, c='b', marker='o', label='Agent')
+            self.__plt_car_point2 = ax.scatter([], [], s=15, c='b', marker='o', label='Agent')
             self.__plt_targ_range, = ax.plot([], [], 'g:', linewidth=1.0)
             self.__plt_targ_point = ax.scatter([], [], s=15, c='g', marker='o', label='Target')
             self.__plt_lidar_scan, = ax.plot([], [], 'ro', markersize=1.5, label='Points')
             self.__plt_lidar_left, = ax.plot([], [], 'c--', linewidth=0.5)
             self.__plt_lidar_right, = ax.plot([], [], 'c--', linewidth=0.5)
-            ax.legend(loc='best').set_draggable(True)
+        
         # 绘图
         self.__plt_car_path.set_data(np.array(self.log.path).T) # [xxxxyyyy]
         self.__plt_car_point.set_offsets(self.log.path[-1])     # [xyxyxyxy]
         θ = np.linspace(0, 2*np.pi, 18)
         self.__plt_targ_range.set_data(self.log.end_pos[0]+D_ERR*np.cos(θ), self.log.end_pos[1]+D_ERR*np.sin(θ))
         self.__plt_targ_point.set_offsets(self.log.end_pos)
+
+        # 计算小车的姿态位置
+        car_x, car_y = self.log.path[-1][0], self.log.path[-1][1]
+        if len(self.log.path) >= 2:
+            dx = self.log.path[-1][0] - self.log.path[-2][0]  # x坐标差
+            dy = self.log.path[-1][1] - self.log.path[-2][1]  # y坐标差
+            angle = np.arctan2(dy, dx)  # 计算角度（弧度转为度数）
+        else:
+            angle = 0
+
+        # 确保矩形旋转时围绕中心点
+        half_width = self.car_length / 2
+        half_height = self.car_width / 2
+
+        # 定义矩形四个顶点的坐标，相对于矩形几何中心
+        rectangle_points = np.array([
+            [-half_width, -half_height],
+            [ half_width, -half_height],
+            [ half_width,  half_height],
+            [-half_width,  half_height]
+        ])
+
+        # 计算旋转矩阵
+        rotation_matrix = np.array([
+            [np.cos(angle), -np.sin(angle)],
+            [np.sin(angle),  np.cos(angle)]
+        ])
+
+        # 将矩形的四个顶点绕几何中心旋转
+        rotated_points = (rotation_matrix @ rectangle_points.T).T
+
+        # 将旋转后的矩形平移到车的几何中心
+        rotated_points[:, 0] += car_x
+        rotated_points[:, 1] += car_y
+
+        # 创建 Polygon 对象，绘制旋转后的矩形
+        if hasattr(self, 'car_polygon'):
+            # 如果已经有一个 Polygon 对象，直接更新数据
+            self.car_polygon.set_xy(rotated_points)
+        else:
+            # 创建一个新的 Polygon 对象
+            self.car_polygon = Polygon(rotated_points, closed=True, edgecolor='r', facecolor='none', label='Car')
+            ax.add_patch(self.car_polygon)
+
+        self.__plt_car_point2.set_offsets([car_x, car_y])  # 更新小车的位置
+
         if self.log.curr_scan_pos:
             points = np.array(self.log.curr_scan_pos)
             self.__plt_lidar_scan.set_data(points[:, 0], points[:, 1])
         else:
             self.__plt_lidar_scan.set_data([], [])
+        
+        # 更新激光扫描线
         x, y, yaw = *self.log.path[-1], self.log.yaw[-1]
         x1 = x + self.lidar.max_range * np.cos(-yaw + np.deg2rad(self.lidar.scan_angle/2))
         x2 = x + self.lidar.max_range * np.cos(-yaw - np.deg2rad(self.lidar.scan_angle/2))
@@ -395,6 +450,7 @@ class DynamicPathPlanning(gym.Env):
         y2 = y + self.lidar.max_range * np.sin(-yaw - np.deg2rad(self.lidar.scan_angle/2))
         self.__plt_lidar_left.set_data([x, x1], [y, y1])
         self.__plt_lidar_right.set_data([x, x2], [y, y2])
+        
         # 窗口暂停
         plt.pause(0.001)
 
@@ -534,68 +590,12 @@ class DynamicPathPlanning(gym.Env):
         ψ = cls._limit_angle(ψ)
         return np.array([x, z, V, ψ], dtype=np.float32) # deepcopy
 
-# 修改后的侧方停车环境
-class ParallelParkingEnv(DynamicPathPlanning):
-    """侧方停车任务的环境"""
+    
 
-    def __init__(self, max_episode_steps=300, dt=0.5, normalize_observation=True, old_gym_style=True):
-        super().__init__(max_episode_steps, dt, normalize_observation, old_gym_style)
-        self.vehicle_length = 4.5  # 车辆长度
-        self.vehicle_width = 2.0  # 车辆宽度
-        self.parking_spot = [(-3, -1), (-3, -3), (-7, -3), (-7, -1)]  # 停车位的顶点
-        self.vehicle_shape = None  # 车辆的当前形状
-        self._update_vehicle_shape()
 
-    def reset(self):
-        """重置环境，初始化车辆位置和停车位"""
-        super().reset(mode=1)
-        self.state[2] = 0.0  # 初始速度为0
-        self.state[3] = 0.0  # 初始方向为0
-        self._update_vehicle_shape()
-        obs = self._get_obs(self.state)
-        return self._norm_obs(obs), {}
 
-    def step(self, act):
-        """更新车辆状态和位置"""
-        obs, rew, done, truncated, info = super().step(act)
-        self._update_vehicle_shape()
-        # 计算是否停车成功
-        if not done and not truncated:
-            if self._check_parking_success():
-                rew += 100.0
-                done = True
-                info['state'] = 'success'
-        return obs, rew, done, truncated, info
 
-    def _update_vehicle_shape(self):
-        """更新车辆的形状（矩形表示）"""
-        x, z, _, ψ = self.state
-        corners = self._get_vehicle_corners(x, z, ψ)
-        self.vehicle_shape = geo.Polygon(corners)
 
-    def _get_vehicle_corners(self, x, z, ψ):
-        """根据车辆位置和朝向计算四个角的坐标"""
-        L, W = self.vehicle_length, self.vehicle_width
-        dx = np.array([L / 2, L / 2, -L / 2, -L / 2])
-        dz = np.array([W / 2, -W / 2, -W / 2, W / 2])
-        corners = np.stack([dx, dz], axis=1)
-        rotation = np.array([[np.cos(ψ), -np.sin(ψ)], [np.sin(ψ), np.cos(ψ)]])
-        rotated = np.dot(corners, rotation.T)
-        return [(x + p[0], z + p[1]) for p in rotated]
-
-    def _check_parking_success(self):
-        """判断车辆是否成功停入停车位"""
-        parking_polygon = geo.Polygon(self.parking_spot)
-        return parking_polygon.contains(self.vehicle_shape)
-
-    def render(self, mode="human", figsize=[8, 8]):
-        """可视化环境"""
-        super().render(mode, figsize)
-        ax = plt.gca()
-        parking_polygon = geo.Polygon(self.parking_spot)
-        plot_polygon(parking_polygon, ax=ax, facecolor='none', edgecolor='b', linewidth=2, linestyle='--')
-        if self.vehicle_shape:
-            plot_polygon(self.vehicle_shape, ax=ax, facecolor='r', edgecolor='r')
 
 
 '''------------------------↑↑↑↑↑ 动态避障环境 ↑↑↑↑↑---------------------------
