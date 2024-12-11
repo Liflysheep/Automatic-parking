@@ -15,6 +15,8 @@ import torch as th
 import torch.nn as nn
 from copy import deepcopy
 from sac_agent import *
+from arg import parse_args
+
 # 1.定义经验回放（取决于观测和动作数据结构）
 class Buffer(BaseBuffer):
     def __init__(self, memory_size, obs_space, act_space):
@@ -174,7 +176,7 @@ from path_plan_env import DynamicPathPlanning
 env = DynamicPathPlanning()
 obs_space = env.observation_space
 act_space = env.action_space
-
+args = parse_args()
 
 
 '''实例化算法'''
@@ -194,7 +196,24 @@ critic = SAC_Critic(
     )
 
 # 3.算法设置
-agent = SAC_Agent(env, batch_size=2048)
+agent = SAC_Agent(
+    env=env,
+    gamma=args.gamma,
+    alpha=args.alpha,
+    batch_size=args.batch_size,
+    update_after=args.update_after,
+    lr_decay_period=args.lr_decay_period,
+    lr_critic=args.lr_critic,
+    lr_actor=args.lr_actor,
+    tau=args.tau,
+    q_loss_cls=args.q_loss_cls,
+    grad_clip=args.grad_clip,
+    adaptive_alpha=args.adaptive_alpha,
+    target_entropy=args.target_entropy,
+    lr_alpha=args.lr_alpha,
+    alpha_optim_cls=args.alpha_optim_cls,
+    device=args.device
+)
 agent.set_buffer(buffer)
 agent.set_nn(actor, critic)
 agent.cuda()

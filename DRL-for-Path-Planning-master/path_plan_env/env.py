@@ -107,11 +107,11 @@ TIME_STEP = 4
 
 class DynamicPathPlanning(gym.Env):
     """从力学与控制的角度进行规划 (东天南坐标系)
-    >>> dx/dt = V * cos(ψ)
-    >>> dz/dt = -V * sin(ψ)
-    >>> dV/dt = g * nx
-    >>> dψ/dt = -g / V * tan(μ)
-    >>> u = [nx, μ]
+    # >>> dx/dt = V * cos(ψ)
+    # >>> dz/dt = -V * sin(ψ)
+    # >>> dV/dt = g * nx
+    # >>> dψ/dt = -g / V * tan(μ)
+    # >>> u = [nx, μ]
     """
 
     def __init__(self, max_episode_steps=500, dt=0.5, normalize_observation=True, old_gym_style=True):

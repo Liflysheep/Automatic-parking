@@ -15,6 +15,9 @@ import torch as th
 import torch.nn as nn
 from copy import deepcopy
 from sac_agent import *
+from arg import parse_args
+
+
 # 1.定义经验回放（取决于观测和动作数据结构）
 class Buffer(BaseBuffer):
     def __init__(self, memory_size, obs_space, act_space):
@@ -113,7 +116,7 @@ from path_plan_env import StaticPathPlanning, NormalizedActionsWrapper
 env = NormalizedActionsWrapper(StaticPathPlanning())
 obs_space = env.observation_space
 act_space = env.action_space
-
+args = parse_args()
 
 
 '''实例化算法'''
@@ -133,7 +136,24 @@ critic = SAC_Critic(
     )
 
 # 3.算法设置
-agent = SAC_Agent(env)
+agent = SAC_Agent(
+    env=env,
+    gamma=args.gamma,
+    alpha=args.alpha,
+    batch_size=args.batch_size,
+    update_after=args.update_after,
+    lr_decay_period=args.lr_decay_period,
+    lr_critic=args.lr_critic,
+    lr_actor=args.lr_actor,
+    tau=args.tau,
+    q_loss_cls=args.q_loss_cls,
+    grad_clip=args.grad_clip,
+    adaptive_alpha=args.adaptive_alpha,
+    target_entropy=args.target_entropy,
+    lr_alpha=args.lr_alpha,
+    alpha_optim_cls=args.alpha_optim_cls,
+    device=args.device
+)
 agent.set_buffer(buffer)
 agent.set_nn(actor, critic)
 agent.cuda()
@@ -141,7 +161,7 @@ agent.cuda()
 
 
 '''训练LOOP''' 
-MAX_EPISODE = 2000
+MAX_EPISODE = 2
 for episode in range(MAX_EPISODE):
     ## 重置回合奖励
     ep_reward = 0
@@ -167,7 +187,7 @@ for episode in range(MAX_EPISODE):
             obs = deepcopy(next_obs)
     #end for
 #end for
-agent.export("./path_plan_env/policy_static.onnx") # 导出策略模型
+agent.export("./path_plan_env/text.onnx") # 导出策略模型
 # agent.save("./checkpoint") # 存储算法训练进度
 # agent.load("./checkpoint") # 加载算法训练进度
 

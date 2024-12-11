@@ -324,38 +324,40 @@ $$
 动力学模型：
 
 $$
-\left\{\begin{array}{l}
+\left\{
+\begin{array}{l}
 \frac{d x}{d t}=V \cos \theta \cos \psi \\
-\frac{d y}{d t}=V \sin \theta \equiv 0\\
+\frac{d y}{d t}=V \sin \theta \equiv 0 \\
 \frac{d z}{d t}=-V \cos \theta \sin \psi \\
 \frac{d V}{d t}=g\left(n_{x}-\sin \theta\right) \\
 \frac{d \theta}{d t}=\frac{g}{V}\left(n_{y} \cos \mu-\cos \theta\right)\equiv 0 \\
 \frac{d \psi}{d t}=-\frac{g n_{y} \sin \mu}{V \cos \theta}
-\end{array}\right.
+\end{array}
+\right\}
 $$
 
 状态空间（BoxSpace）：
 
 $$
-\mathbf{s} \subset \text{Box} \left \{  x,z,V,\psi \right \}
+\mathbf{s} \subset \text{Box} \left\{ x, z, V, \psi \right\}
 $$
 
 $$
-V \in \left [ 0.05,0.2 \right ]
+V \in \left[ 0.05, 0.2 \right]
 $$
 
-控制空间（BoxSpace）：
+\text{控制空间（BoxSpace）}：
 
 $$
-\mathbf{u} \subset \text{Box} \left \{ n_{x},\mu  \right \}
-$$
-
-$$
-n_{x}\in \left [ -0.02,0.02 \right ]
+\mathbf{u} \subset \text{Box} \left\{ n_{x}, \mu \right\}
 $$
 
 $$
-\mu \in \left [ -0.005,0.005 \right ]
+n_{x} \in \left[ -0.02, 0.02 \right]
+$$
+
+$$
+\mu \in \left[ -0.005, 0.005 \right]
 $$
 
 ##### 2.观测空间&动作空间
@@ -385,7 +387,7 @@ D为距离、V为速度、q为视线角、points为雷达测距
 2.1动作空间（BoxSpace）：
 
 $$
-\mathbf{a} \subset \text{Box} \left \{ a_0,a_1 \right \}
+\mathbf{a} \subset \text{Box} \left\{ a_0, a_1 \right\}
 $$
 
 | 动作空间             |                                |
