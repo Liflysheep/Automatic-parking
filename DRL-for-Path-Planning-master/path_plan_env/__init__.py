@@ -6,5 +6,6 @@ __all__ = [
     "DynamicPathPlanning",
     "StaticPathPlanning",
     "NormalizedActionsWrapper",
-    "LidarModel",
+    "LidarModel"
 ]
+
