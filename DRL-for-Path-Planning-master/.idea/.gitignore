@@ -8,3 +8,6 @@
 /dataSources.local.xml
 
 output/
+*.png
+*.gif
+*.jpg

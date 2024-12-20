@@ -158,7 +158,7 @@ class DynamicPathPlanning(gym.Env):
         self.__old_gym = old_gym_style
         self.car_length, self.car_width = CAR_LENGTH, CAR_WIDTH
         # plt设置
-        plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
+        plt.rcParams['font.sans-serif'] = ['Noto Sans CJK', 'DejaVu Sans', 'Arial Unicode MS', 'WenQuanYi Zen Hei','Microsoft YaHei']        # 设置通用中文字体（跨平台使用）
         plt.rcParams['axes.unicode_minus'] = False
         plt.close("all")
 

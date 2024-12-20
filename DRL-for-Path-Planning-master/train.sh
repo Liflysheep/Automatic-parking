@@ -4,7 +4,7 @@
 # Define hyperparameters
 gamma=0.99
 alpha=0.1
-batch_size=64
+batch_size=128
 update_after=500
 #lr_decay_period=None
 lr_critic=1e-3
