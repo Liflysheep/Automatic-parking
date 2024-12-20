@@ -15,13 +15,13 @@ env = DynamicPathPlanning(800) # 动作空间本身就是 -1,1
 
 # 2.策略加载
 import onnxruntime as ort
-policy = ort.InferenceSession("./path_plan_env/policy_dynamic.onnx")
+policy = ort.InferenceSession("./path_plan_env/policy_dynamic_new.onnx")
 
 
 # 3.仿真LOOP
 from copy import deepcopy
 
-MAX_EPISODE = 3
+MAX_EPISODE = 50
 for episode in range(MAX_EPISODE):
     ## 获取初始观测
     obs = env.reset(mode=1)

@@ -19,6 +19,8 @@ from scipy.integrate import odeint
 from shapely import geometry as geo
 from shapely.plotting import plot_polygon
 from matplotlib.patches import Rectangle, Polygon
+from shapely.geometry import Point as shp_Point
+from shapely.geometry import Polygon as shp_Polygon
 
 __all__ = ["DynamicPathPlanning", "StaticPathPlanning", "NormalizedActionsWrapper"]
 
@@ -26,19 +28,22 @@ __all__ = ["DynamicPathPlanning", "StaticPathPlanning", "NormalizedActionsWrappe
 
 #----------------------------- ↓↓↓↓↓ 地图设置 ↓↓↓↓↓ ------------------------------#
 class MAP:
-    size = [[-10.0, -5.0], [10.0, 2.5]] # x, z最小值; x, z最大值
-    start_pos = [7.5, -2]                   # 起点坐标
-    end_pos = [0, 0.5]                   # 终点坐标
-    obstacles = [                         # 障碍物, 要求为 geo.Polygon 或 带buffer的 geo.Point/geo.LineString
-        geo.Polygon([(-10, 0), (-9.9, 0), (-9.9, -5), (-10, -5)]),
-        geo.Polygon([(10, 0), (9.9, 0), (9.9, -5), (10, -5)]),
-        geo.Polygon([(-9.9, -4.9), (-9.9, -5), (9.9, -5), (9.9, -4.9)]),
-        geo.Polygon([(-10, 2.5), (-10, 2), (10, 2), (10, 2.5)]),
-        geo.Polygon([(-7, 2), (-7, 0), (-3, 0), (-3, 2)]),
-        geo.Polygon([(-10, 2), (-10, 0), (-3, 0), (-3, 2)]),
-        geo.Polygon([(10, 2), (10, 0), (3, 0), (3, 2)])
+    size = [[-2.0, -0.6], [2.0, 0.4]]  # x, z最小值; x, z最大值
+    start_size = [[-2.0, -0.3], [2.0, 0.0]]  # 约束训练时起始坐标
+    start_pos = [-0.75, -0.2]              # 起点坐标
+    end_pos = [0, 0.10]                   # 终点坐标
+    obstacles = [                          # 障碍物, 要求为 geo.Polygon 或 带buffer的 geo.Point/geo.LineString
+        # geo.Polygon([(-1.0, 0), (-0.99, 0), (-0.99, -0.5), (-1.0, -0.5)]),
+        # geo.Polygon([(1.0, 0), (0.99, 0), (0.99, -0.5), (1.0, -0.5)]),
+        # geo.Polygon([(-0.99, -0.49), (-0.99, -0.5), (0.99, -0.5), (0.99, -0.49)]),
+        geo.Polygon([(-5.0, 0.4), (-5.0, 0.3), (5.0, 0.3), (5.0, 0.4)]),
+        geo.Polygon([(-5.0, -0.4), (-5.0, -0.5), (5.0, -0.5), (5.0, -0.4)]),
+        geo.Polygon([(-1.0, 0.3), (-1.0, 0), (-0.15, 0), (-0.15, 0.3)]),
+        geo.Polygon([(1.0, 0.3), (1.0, 0), (0.15, 0), (0.15, 0.3)]),
     ]
 
+
+    #这两个函数没用
     @classmethod
     def show(cls):
         plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
@@ -79,13 +84,13 @@ class Logger:
 
 
 # 运动速度设置
-V_LOW = 0.05 # 最小速度
-V_HIGH = 0.2 # 最大速度
-V_MIN = V_LOW + 0.03  # 惩罚区间下限(大于V_LOW)
-V_MAX = V_HIGH - 0.03 # 惩罚区间上限(小于V_HIGH)
+V_LOW = 0.001  # 最小速度
+V_HIGH = 0.3  # 最大速度
+V_MIN = V_LOW + 0.005  # 惩罚区间下限(大于V_LOW)
+V_MAX = V_HIGH - 0.05  # 惩罚区间上限(小于V_HIGH)
 # 质心动力学状态设置
-STATE_LOW = [MAP.size[0][0], MAP.size[0][1], V_LOW, -math.pi] # x, z, V, ψ
-STATE_HIGH = [MAP.size[1][0], MAP.size[1][1], V_HIGH, math.pi] # x, z, V, ψ
+STATE_LOW = [MAP.start_size[0][0], MAP.start_size[0][1], V_LOW, -math.pi] # x, z, V, ψ
+STATE_HIGH = [MAP.start_size[1][0], MAP.start_size[1][1], V_HIGH, math.pi] # x, z, V, ψ
 # 观测设置
 OBS_STATE_LOW = [0, V_LOW, -math.pi]                                                                  # 相对终点距离 + 速度 + 终点与速度的夹角(单位rad)
 OBS_STATE_HIGH = [1.414*max(STATE_HIGH[0]-STATE_LOW[0], STATE_HIGH[1]-STATE_LOW[1]), V_HIGH, math.pi] # 相对终点距离 + 速度 + 终点与速度的夹角(单位rad)
@@ -93,16 +98,21 @@ OBS_STATE_HIGH = [1.414*max(STATE_HIGH[0]-STATE_LOW[0], STATE_HIGH[1]-STATE_LOW[
 CTRL_LOW = [-0.02, -0.005] # 切向过载 + 速度滚转角(单位rad/s)
 CTRL_HIGH = [0.02, 0.005]  # 切向过载 + 速度滚转角(单位rad/s)
 # 雷达设置
-SCAN_RANGE = 2.5 # 扫描距离
-SCAN_ANGLE = 128 # 扫描范围(单位deg)
-SCAN_NUM = 128   # 扫描点个数
-SCAN_CEN = 48    # 中心区域index开始位置(小于SCAN_NUM/2)
+SCAN_RANGE = 12  # 扫描距离
+SCAN_ANGLE = 360  # 扫描范围(单位deg)
+SCAN_NUM = 360   # 扫描点个数
+SCAN_CEN = 90    # 中心区域范围(小于SCAN_NUM/2)
 # 距离设置
-D_SAFE = 1.5 # 碰撞半径
-D_BUFF = 1.0 # 缓冲距离(大于D_SAFE)
-D_ERR = 0.5  # 目标误差距离
+D_SAFE = 0.10  # 碰撞半径,这个已经没有用了
+D_BUFF = 0.20  # 缓冲距离(大于D_SAFE)
+D_ERR = 0.02  # 目标误差距离
+D_HEAD = 0.04  # 雷达偏移距离
 # 序列观测长度
 TIME_STEP = 4
+# 小车参数
+CAR_LENGTH = 0.24  # 小车长
+CAR_WIDTH = 0.2    # 小车宽
+
 
 
 class DynamicPathPlanning(gym.Env):
@@ -146,16 +156,17 @@ class DynamicPathPlanning(gym.Env):
         self.__need_reset = True
         self.__norm_observation = normalize_observation
         self.__old_gym = old_gym_style
-        self.car_length, self.car_width = 2, 1.4
+        self.car_length, self.car_width = CAR_LENGTH, CAR_WIDTH
         # plt设置
         plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
         plt.rcParams['axes.unicode_minus'] = False
         plt.close("all")
 
-    def reset(self, mode=0):
+    def reset(self, mode=0, fixed_end_pos=None):
         """重置环境
            mode=0, 随机初始化起点终点, 速度、方向随机
            mode=1, 初始化起点终点到地图设置, 速度、方向随机
+           fixed_end_pos: 设定目标位置的可选参数，格式为 (x, y)，如果为 None，则随机选择目标位置
         """
         self.__need_reset = False
         self.time_step = 0
@@ -163,16 +174,25 @@ class DynamicPathPlanning(gym.Env):
         while 1:
             self.state = self.state_space.sample()
             if mode == 0:
-                self.start_pos = deepcopy(self.state[:2]) # 分不清引用传递, 暴力deepcopy就完事了
-                self.end_pos = deepcopy(self.state_space.sample()[:2])
+                self.start_pos = deepcopy(self.state[:2])  # 分不清引用传递, 暴力deepcopy就完事了
+                if fixed_end_pos is None:
+                    self.end_pos = deepcopy(self.state_space.sample()[:2])  # 随机目标位置
+                else:
+                    self.end_pos = np.array(fixed_end_pos, dtype=np.float32)  # 固定目标位置
             else:
                 self.start_pos = np.array(MAP.start_pos, dtype=np.float32)
-                self.end_pos = np.array(MAP.end_pos, dtype=np.float32)
-                self.state = np.array([*self.start_pos[:2], *self.state[2:]], dtype=np.float32)
+                if fixed_end_pos is None:
+                    self.end_pos = np.array(MAP.end_pos, dtype=np.float32)  # 从地图中获取目标位置
+                else:
+                    self.end_pos = np.array(fixed_end_pos, dtype=np.float32)  # 使用传入的目标位置
+                self.state = np.array([*self.start_pos[:2], 0.01, 0.0], dtype=np.float32)
+                # self.state = np.array([*self.start_pos[:2], *self.state[2:]], dtype=np.float32)
+
+            # 检查起点和终点是否在障碍物中
             for o in self.obstacles:
-                if o.contains(geo.Point(*self.start_pos)) \
-                or o.contains(geo.Point(*self.end_pos)):
-                    if mode != 0: raise ValueError("地图的初始/目标位置不能设置在障碍里面!!!")
+                if o.contains(geo.Point(*self.start_pos)) or o.contains(geo.Point(*self.end_pos)):
+                    if mode != 0:
+                        raise ValueError("地图的初始/目标位置不能设置在障碍里面!!!")
                     break
             else:
                 break
@@ -195,7 +215,6 @@ class DynamicPathPlanning(gym.Env):
         self.log.yaw = [self.state[3]]            # 偏角
         self.log.length = [[self.L, self.D_last]] # 航程+距离
         self.log.curr_scan_pos = []               # 当前时刻扫描的障碍坐标
-        self.log.car_leftup = [[self.start_pos[0] - (self.car_length/2), self.start_pos[1] - (self.car_width/2)]]
         # 输出
         if self.__old_gym:
             return self._norm_obs(obs)
@@ -230,15 +249,15 @@ class DynamicPathPlanning(gym.Env):
         # 观测空间
         return {'seq_points': np.array(self.deque_points, np.float32),
                 'seq_vector': np.array(self.deque_vector, np.float32)}
-    
+
     def _get_rew(self):
         """获取奖励"""
         rew = -0.01
         # 1.主动避障奖励 [-2, 2]
         point0 = self.deque_points[-2] # 0 上一时刻
-        center0 = point0[SCAN_CEN:-SCAN_CEN]
+        center0 = point0[(SCAN_NUM-SCAN_CEN)//2:-(SCAN_NUM-SCAN_CEN)//2]
         point1 = self.deque_points[-1] # 1 当前时刻
-        center1 = point1[SCAN_CEN:-SCAN_CEN]
+        center1 = point1[(SCAN_NUM-SCAN_CEN)//2:-(SCAN_NUM-SCAN_CEN)//2]
         # 中心区域center障碍变化程度
         if self.exist_last is None:
             self.exist_last = np.any(center0>-0.5)
@@ -247,7 +266,7 @@ class DynamicPathPlanning(gym.Env):
             # 一直有障碍：看距离变化
             if self.exist_last:
                 effective_center0, effective_center1 = center0[center0>-0.5], center1[center1>-0.5] # 不可能是空数组
-                d0_mean = np.mean(effective_center0) + 1e-8 # 平均距离 (障碍整体远离程度)
+                d0_mean = np.mean(effective_center0) + 1e-8  # 平均距离 (障碍整体远离程度)
                 d1_mean = np.mean(effective_center1) + 1e-8
                 d0_min = min(effective_center0) # 最小距离 (是否远离障碍物)
                 d1_min = min(effective_center1)
@@ -256,7 +275,7 @@ class DynamicPathPlanning(gym.Env):
             else:
                 rew -= 0.5
         else:
-            # 有障碍 -> 无障碍 
+            # 有障碍 -> 无障碍
             if self.exist_last:
                 rew += 1.0
             # 一直无障碍, r += 0
@@ -280,23 +299,58 @@ class DynamicPathPlanning(gym.Env):
         # 6.任务奖励
         done = False
         info = {'state': 'none'}
-        if d_min < D_SAFE: # 碰撞
-            rew -= 150
+        # 获取小车矩形碰撞区域
+        rectangle_points,_,_,_,_ = self._calculate_car_position_and_rotate()
+        # 碰撞判定（是否与障碍物相交）
+        if self._check_collision(rectangle_points, self.log.curr_scan_pos) or d_min < 0.01:
+            rew -= 150  # 碰撞的惩罚
             done = True
             info['state'] = 'fail'
-        elif D < D_ERR: # 成功
-            η = np.nanmax([3.5 - 2.5*self.L/(self.D_init+1e-8), 0.5]) # 航程折扣 (实现路径最短)
-            # NOTE max返回nan, 输入为*args或ListLike; np.nanmax返回除了nan的max, 输入只能为ListLike
-            rew += 200 * η # 100~700+
+        # elif d_min < D_SAFE:  # 碰撞
+        #     rew -= 150
+        #     done = True
+        #     info['state'] = 'fail'
+        elif D < D_ERR:  # 成功
+            η = np.nanmax([3.5 - 2.5 * self.L / (self.D_init + 1e-8), 0.5])  # 航程折扣 (实现路径最短)
+            rew += 200 * η  # 100~700+
             done = True
-            info['state'] = 'sucess'
+            info['state'] = 'success'
         if V < V_MIN or V > V_MAX or d_min < D_BUFF:
             rew -= 5
         # 更新记忆
         self.exist_last = deepcopy(exist)
         self.D_last = deepcopy(D)
+
         # 输出
         return rew, done, info
+
+    def _check_collision(self, rectangle_points, obstacles):
+        """检测小车的矩形与障碍物是否发生碰撞"""
+        for obstacle in obstacles:
+            if self._is_point_inside_rectangle(rectangle_points,obstacle):
+                return True
+        return False
+
+    def _is_point_inside_rectangle(self, rotated_points, obstacle):
+        """
+        判断点是否在旋转矩形内。
+
+        参数:
+            rotated_points (np.ndarray): 旋转后的矩形四个顶点的全局坐标，形状为 (4, 2)。
+            obstacle (tuple): 障碍物的坐标 (x, y)，其中 y 对应于 z 轴。
+
+        返回:
+            bool: 如果点在矩形内，返回 True，否则返回 False。
+        """
+        # 将障碍物的 (x, y) 映射到 (x, z)
+        x, y = obstacle
+        point = shp_Point(x, y)  # y 对应于 z 轴
+
+        # 创建多边形对象
+        polygon = shp_Polygon(rotated_points)
+
+        # 使用 Shapely 的 contains 方法判断点是否在多边形内
+        return polygon.contains(point)
 
     def step(self, act: np.ndarray, tau: float = None):
         """状态转移
@@ -339,10 +393,10 @@ class DynamicPathPlanning(gym.Env):
         info["distance"] = self.D_last
         # 记录
         self.log.path.append(self.state[:2])
-        self.log.car_leftup.append(np.array(
-            [self.log.car_leftup[-1][0]+self.log.path[-1][0]-self.log.path[-2][0], 
-             self.log.car_leftup[-1][1]+self.log.path[-1][1]-self.log.path[-2][1]]
-             , dtype=np.float32))
+        # self.log.car_leftup.append(np.array(
+        #     [self.log.car_leftup[-1][0]+self.log.path[-1][0]-self.log.path[-2][0],
+        #      self.log.car_leftup[-1][1]+self.log.path[-1][1]-self.log.path[-2][1]]
+        #      , dtype=np.float32))
         self.log.ctrl.append(u)
         self.log.speed.append(self.state[2])
         self.log.yaw.append(self.state[3])
@@ -363,7 +417,65 @@ class DynamicPathPlanning(gym.Env):
         )
         obs['seq_points'] = self._normalize_points(obs['seq_points'])
         return obs
-    
+
+    def _calculate_car_position_and_rotate(self):
+        """
+        计算小车在东天南坐标系下的旋转矩形位置。
+
+        返回:
+            rotated_points (np.ndarray): 旋转后的矩形四个顶点的全局坐标。
+            radar_x (float): 雷达的全局 x 坐标。
+            radar_z (float): 雷达的全局 z 坐标。
+            car_center_x (float): 小车几何中心的全局 x 坐标。
+            car_center_z (float): 小车几何中心的全局 z 坐标。
+        """
+        # 获取小车的姿态位置（雷达的位置）
+        car_x, car_z = self.log.path[-1][0], self.log.path[-1][1]  # 雷达的位置
+        yaw = self.log.yaw[-1]  # 确保 yaw 是弧度
+
+        v_vector = np.array([np.cos(yaw),np.sin(-yaw)])  #速度的单位向量
+
+        # 定义矩形的尺寸
+        half_length = self.car_length / 2  # 小车长度的一半（前后）
+        half_width = self.car_width / 2  # 小车宽度的一半（左右）
+
+        # 雷达的位置（全局坐标系）
+        radar_x = car_x
+        radar_z = car_z
+
+        # 定义小车的几何中心位置（相对于雷达位置）
+        # 假设 D_HEAD 是雷达到小车几何中心的距离，方向由 yaw 决定
+        car_center_x = radar_x - D_HEAD * np.cos(yaw)
+        car_center_z = radar_z - D_HEAD * np.sin(-yaw)
+
+        # 定义矩形四个顶点的坐标，相对于几何中心
+        rectangle_points = np.array([
+            [-half_length, -half_width],  # 左下
+            [half_length, -half_width],  # 右下
+            [half_length, half_width],  # 右上
+            [-half_length, half_width]  # 左上
+        ])  # 形状为 (4, 2)
+
+        # 将矩形顶点移动到相对于雷达的位置
+        relative_to_radar = rectangle_points - D_HEAD*v_vector
+
+        # 计算旋转矩阵（绕雷达旋转，yaw 为顺时针旋转角度）
+        rotation_matrix = np.array([
+            [np.cos(yaw), np.sin(yaw)],
+            [-np.sin(yaw), np.cos(yaw)]
+        ])
+
+        # 对相对于雷达的点进行旋转
+        rotated_relative = rectangle_points @ rotation_matrix.T
+
+        # 将旋转后的点移动回全局坐标系
+        rotated_points = rotated_relative + np.array([car_center_x, car_center_z])
+
+        # 更新当前时刻的旋转后的矩形坐标
+        self.rotated_points = rotated_points
+
+        return rotated_points, radar_x, radar_z,car_center_x,car_center_z
+
     def render(self, mode="human", figsize=[8,8]):
         """测试时可视化环境, 和step交替调用 (不要和plot一起调用, 容易卡)"""
         assert not self.__need_reset, "调用render前必须先reset"
@@ -376,8 +488,8 @@ class DynamicPathPlanning(gym.Env):
             ax = fig.add_axes([0.1, 0.1, 0.8, 0.8])
             MAP.plot(ax, "Path Plan Environment")
             self.__plt_car_path, = ax.plot([], [], 'k-.')
-            self.__plt_car_point = ax.scatter([], [], s=15, c='b', marker='o', label='Agent')
-            self.__plt_car_point2 = ax.scatter([], [], s=15, c='b', marker='o', label='Agent')
+            self.__plt_car_point = ax.scatter([], [], s=5, c='b', marker='o', label='Agent')
+            self.__plt_car_point2 = ax.scatter([], [], s=5, c='r', marker='o', label='Agent')
             self.__plt_targ_range, = ax.plot([], [], 'g:', linewidth=1.0)
             self.__plt_targ_point = ax.scatter([], [], s=15, c='g', marker='o', label='Target')
             self.__plt_lidar_scan, = ax.plot([], [], 'ro', markersize=1.5, label='Points')
@@ -391,39 +503,7 @@ class DynamicPathPlanning(gym.Env):
         self.__plt_targ_range.set_data(self.log.end_pos[0]+D_ERR*np.cos(θ), self.log.end_pos[1]+D_ERR*np.sin(θ))
         self.__plt_targ_point.set_offsets(self.log.end_pos)
 
-        # 计算小车的姿态位置
-        car_x, car_y = self.log.path[-1][0], self.log.path[-1][1]
-        if len(self.log.path) >= 2:
-            dx = self.log.path[-1][0] - self.log.path[-2][0]  # x坐标差
-            dy = self.log.path[-1][1] - self.log.path[-2][1]  # y坐标差
-            angle = np.arctan2(dy, dx)  # 计算角度（弧度转为度数）
-        else:
-            angle = 0
-
-        # 确保矩形旋转时围绕中心点
-        half_width = self.car_length / 2
-        half_height = self.car_width / 2
-
-        # 定义矩形四个顶点的坐标，相对于矩形几何中心
-        rectangle_points = np.array([
-            [-half_width, -half_height],
-            [ half_width, -half_height],
-            [ half_width,  half_height],
-            [-half_width,  half_height]
-        ])
-
-        # 计算旋转矩阵
-        rotation_matrix = np.array([
-            [np.cos(angle), -np.sin(angle)],
-            [np.sin(angle),  np.cos(angle)]
-        ])
-
-        # 将矩形的四个顶点绕几何中心旋转
-        rotated_points = (rotation_matrix @ rectangle_points.T).T
-
-        # 将旋转后的矩形平移到车的几何中心
-        rotated_points[:, 0] += car_x
-        rotated_points[:, 1] += car_y
+        rotated_points,radar_x, radar_y,car_center_x,car_center_y = self._calculate_car_position_and_rotate()
 
         # 创建 Polygon 对象，绘制旋转后的矩形
         if hasattr(self, 'car_polygon'):
@@ -434,7 +514,7 @@ class DynamicPathPlanning(gym.Env):
             self.car_polygon = Polygon(rotated_points, closed=True, edgecolor='r', facecolor='none', label='Car')
             ax.add_patch(self.car_polygon)
 
-        self.__plt_car_point2.set_offsets([car_x, car_y])  # 更新小车的位置
+        self.__plt_car_point2.set_offsets([car_center_x, car_center_y])  # 更新小车的位置
 
         if self.log.curr_scan_pos:
             points = np.array(self.log.curr_scan_pos)
@@ -558,28 +638,6 @@ class DynamicPathPlanning(gym.Env):
             -9.8/V * math.tan(μ) # μ<90, 不存在inf情况
         ]
         return dsdt
-    
-    # @staticmethod
-    # def _fixed_wing_3d(s, t, u):
-    #     """东天南坐标系空间运动ode模型
-    #     s = [x, y, z, V, θ, ψ]
-    #     u = [nx, ny, μ]
-    #     """
-    #     _, _, _, V, θ, ψ = s
-    #     nx, ny, μ = u
-    #     if abs(math.cos(θ)) < 0.01:
-    #         dψdt = 0 # θ = 90° 没法积分了!!!
-    #     else:
-    #         dψdt = -9.8 * ny*math.sin(μ) / (V*math.cos(θ))
-    #     dsdt = [
-    #         V * math.cos(θ) * math.cos(ψ),
-    #         V * math.sin(θ),
-    #         -V * math.cos(θ) * math.sin(ψ),
-    #         9.8 * (nx - math.sin(θ)),
-    #         9.8/V * (ny*math.cos(μ) - math.cos(θ)),
-    #         dψdt
-    #     ]
-    #     return dsdt
 
     @classmethod
     def _ode45(cls, s_old, u, dt):
@@ -834,11 +892,10 @@ class NormalizedActionsWrapper(gym.ActionWrapper):
 
 
 if __name__ == '__main__':
-    # MAP.show()
     env = DynamicPathPlanning()
     for ep in range(10):
         print(f"episode{ep}: begin")
-        obs = env.reset()
+        obs = env.reset(mode=0,fixed_end_pos=MAP.end_pos)
         while 1:
             try:
                 env.render()

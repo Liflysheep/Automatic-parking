@@ -11,7 +11,7 @@
 
 '''算法定义'''
 import numpy as np
-import torch as th
+import torch
 import torch.nn as nn
 from copy import deepcopy
 from sac_agent import *
@@ -68,22 +68,22 @@ class Buffer(BaseBuffer):
         self._idxs = idxs or np.random.choice(self._current_size, size=batch_size, replace=False)
         batch = {
             's': {
-                'seq_points': th.FloatTensor(self._data['points'][self._idxs]).to(self.device),
-                'seq_vector': th.FloatTensor(self._data['vector'][self._idxs]).to(self.device),
+                'seq_points': torch.FloatTensor(self._data['points'][self._idxs]).to(self.device),
+                'seq_vector': torch.FloatTensor(self._data['vector'][self._idxs]).to(self.device),
             },
-            'a': th.FloatTensor(self._data['a'][self._idxs]).to(self.device),
-            'r': th.FloatTensor(self._data['r'][self._idxs]).to(self.device),
+            'a': torch.FloatTensor(self._data['a'][self._idxs]).to(self.device),
+            'r': torch.FloatTensor(self._data['r'][self._idxs]).to(self.device),
             's_': {
-                'seq_points': th.FloatTensor(self._data['points_'][self._idxs]).to(self.device),
-                'seq_vector': th.FloatTensor(self._data['vector_'][self._idxs]).to(self.device),
+                'seq_points': torch.FloatTensor(self._data['points_'][self._idxs]).to(self.device),
+                'seq_vector': torch.FloatTensor(self._data['vector_'][self._idxs]).to(self.device),
             },
-            'done': th.FloatTensor(self._data['done'][self._idxs]).to(self.device),
+            'done': torch.FloatTensor(self._data['done'][self._idxs]).to(self.device),
         }
         return batch
     
     def state_to_tensor(self, state, use_rnn=False):
-        return {'seq_points': th.FloatTensor(state['seq_points']).unsqueeze(0).to(self.device),
-                'seq_vector': th.FloatTensor(state['seq_vector']).unsqueeze(0).to(self.device)}
+        return {'seq_points': torch.FloatTensor(state['seq_points']).unsqueeze(0).to(self.device),
+                'seq_vector': torch.FloatTensor(state['seq_vector']).unsqueeze(0).to(self.device)}
     
 
 # 2.定义神经网络（取决于观测数据结构）
@@ -132,13 +132,13 @@ class EncoderNet(nn.Module):
         f1 = self.cnn_mlp(self.cnn(obs['seq_points'])) # batch, dim
         f2_n, _ = self.rnn(self.rnn_mlp1(obs['seq_vector']), None) # batch, seq, dim
         f2 = self.rnn_mlp2(f2_n[:, -1, :]) # batch, dim
-        return self.fusion(th.cat([f1, f2], dim=-1)) # batch, dim
+        return self.fusion(torch.cat([f1, f2], dim=-1)) # batch, dim
     
     @staticmethod
     def _get_cnn_out_dim(cnn: nn.Module, input_shape: tuple[int, ...]):
         # out_dim = (in_dim + 2*pad - dilation*(k_size-1) -1 ) / stride + 1
         cnn_copy = deepcopy(cnn).to('cpu')
-        output = cnn_copy(th.zeros(1, *input_shape))
+        output = cnn_copy(torch.zeros(1, *input_shape))
         return int(np.prod(output.size()))
 
 # Q函数
@@ -206,32 +206,34 @@ agent = SAC_Agent(
     lr_critic=args.lr_critic,
     lr_actor=args.lr_actor,
     tau=args.tau,
-    q_loss_cls=args.q_loss_cls,
+    q_loss_cls=getattr(nn, args.q_loss_cls),
     grad_clip=args.grad_clip,
     adaptive_alpha=args.adaptive_alpha,
     target_entropy=args.target_entropy,
     lr_alpha=args.lr_alpha,
-    alpha_optim_cls=args.alpha_optim_cls,
+    alpha_optim_cls=getattr(torch.optim, args.alpha_optim_cls),
     device=args.device
 )
 agent.set_buffer(buffer)
 agent.set_nn(actor, critic)
 agent.cuda()
-
+agent.load("./checkpoint") # 加载算法训练进度
 
 
 '''训练LOOP'''
 from torch.utils.tensorboard import SummaryWriter # TensorBoard, 启动!!!
-log = SummaryWriter(log_dir = "./tb_log") 
+log = SummaryWriter(log_dir="./tb_log")
 
-MAX_EPISODE = 50000
-LEARN_FREQ = 100
-OUTPUT_FREQ = 50
+MAX_EPISODE = args.max_episode
+# MAX_EPISODE = 1
+LEARN_FREQ = args.learn_freq
+OUTPUT_FREQ = args.output_freq
+
 for episode in range(MAX_EPISODE):
     ## 重置回合奖励
     ep_reward = 0
     ## 获取初始观测
-    obs = env.reset()
+    obs = env.reset(fixed_end_pos=[0, 0.05])
     ## 进行一回合仿真
     for steps in range(env.max_episode_steps):
         # 决策
@@ -258,9 +260,8 @@ for episode in range(MAX_EPISODE):
     if episode % OUTPUT_FREQ == 0:
         env.plot(f"./output/out{episode}.png")
 #end for
-agent.export("./path_plan_env/policy_dynamic.onnx") # 导出策略模型
-# agent.save("./checkpoint") # 存储算法训练进度
-# agent.load("./checkpoint") # 加载算法训练进度
+agent.export("./path_plan_env/policy_dynamic_new.onnx") # 导出策略模型
+agent.save("./checkpoint") # 存储算法训练进度
 
 
 

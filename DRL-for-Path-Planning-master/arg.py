@@ -18,18 +18,22 @@ def parse_args():
     parser.add_argument('--lr_actor', type=float, default=1e-3, help='Learning rate for the actor')
     parser.add_argument('--tau', type=float, default=0.005, help='Soft update coefficient for target Q')
 
-    parser.add_argument('--q_loss_cls', type=str, default='nn.MSELoss', help='Q loss function type')
+    parser.add_argument('--q_loss_cls', type=str, default='MSELoss', help='Q loss function type')
     parser.add_argument('--grad_clip', type=float, default=None, help='Gradient clipping range')
 
     parser.add_argument('--adaptive_alpha', type=bool, default=True, help='Adaptive alpha flag')
     parser.add_argument('--target_entropy', type=float, default=None, help='Target entropy for adaptive alpha')
     parser.add_argument('--lr_alpha', type=float, default=1e-3, help='Learning rate for alpha')
-    parser.add_argument('--alpha_optim_cls', type=str, default='th.optim.Adam', help='Alpha optimizer type')
+    parser.add_argument('--alpha_optim_cls', type=str, default='Adam', help='Alpha optimizer type')
 
     parser.add_argument('--device', type=str, default="cuda" if th.cuda.is_available() else "cpu",
                         help='Device for computation')
 
-
+    #训练参数
+    parser.add_argument('--max_episode', type=int, default=50000,help='train steps per episode')
+    parser.add_argument('--learn_freq', type=int, default=100,help='ni gan ma')
+    parser.add_argument('--output_freq', type=int, default=50,
+                        help='ni gan ma')
 
     return parser.parse_args()
 
