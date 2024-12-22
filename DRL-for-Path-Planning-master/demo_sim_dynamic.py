@@ -42,8 +42,6 @@ for episode in range(MAX_EPISODE):
             break
         else:
             obs = deepcopy(next_obs)
-    #end for
-#end for
 
 
 

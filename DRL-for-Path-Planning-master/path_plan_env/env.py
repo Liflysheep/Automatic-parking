@@ -84,9 +84,9 @@ class Logger:
 
 
 # 运动速度设置
-V_LOW = 0.001  # 最小速度
-V_HIGH = 0.3  # 最大速度
-V_MIN = V_LOW + 0.005  # 惩罚区间下限(大于V_LOW)
+V_LOW = 0.01  # 最小速度
+V_HIGH = 0.30  # 最大速度
+V_MIN = V_LOW + 0.05  # 惩罚区间下限(大于V_LOW)
 V_MAX = V_HIGH - 0.05  # 惩罚区间上限(小于V_HIGH)
 # 质心动力学状态设置
 STATE_LOW = [MAP.start_size[0][0], MAP.start_size[0][1], V_LOW, -math.pi] # x, z, V, ψ
@@ -95,16 +95,16 @@ STATE_HIGH = [MAP.start_size[1][0], MAP.start_size[1][1], V_HIGH, math.pi] # x, 
 OBS_STATE_LOW = [0, V_LOW, -math.pi]                                                                  # 相对终点距离 + 速度 + 终点与速度的夹角(单位rad)
 OBS_STATE_HIGH = [1.414*max(STATE_HIGH[0]-STATE_LOW[0], STATE_HIGH[1]-STATE_LOW[1]), V_HIGH, math.pi] # 相对终点距离 + 速度 + 终点与速度的夹角(单位rad)
 # 控制设置
-CTRL_LOW = [-0.02, -0.005] # 切向过载 + 速度滚转角(单位rad/s)
+CTRL_LOW = [-0.02, -0.005]  # 切向过载 + 速度滚转角(单位rad/s)
 CTRL_HIGH = [0.02, 0.005]  # 切向过载 + 速度滚转角(单位rad/s)
 # 雷达设置
 SCAN_RANGE = 12  # 扫描距离
 SCAN_ANGLE = 360  # 扫描范围(单位deg)
-SCAN_NUM = 360   # 扫描点个数
-SCAN_CEN = 90    # 中心区域范围(小于SCAN_NUM/2)
+SCAN_NUM = 180   # 扫描点个数
+SCAN_CEN = 20    # 中心区域范围(小于SCAN_NUM/2)
 # 距离设置
 D_SAFE = 0.10  # 碰撞半径,这个已经没有用了
-D_BUFF = 0.20  # 缓冲距离(大于D_SAFE)
+D_BUFF = 0.15  # 缓冲距离(大于D_SAFE)
 D_ERR = 0.02  # 目标误差距离
 D_HEAD = 0.04  # 雷达偏移距离
 # 序列观测长度
@@ -124,11 +124,11 @@ class DynamicPathPlanning(gym.Env):
     # >>> u = [nx, μ]
     """
 
-    def __init__(self, max_episode_steps=500, dt=0.5, normalize_observation=True, old_gym_style=True):
+    def __init__(self, max_episode_steps=500, dt=0.2, normalize_observation=True, old_gym_style=True):
         """
         Args:
             max_episode_steps (int): 最大仿真步数. 默认500.
-            dt (float): 决策周期. 默认0.5.
+            dt (float): 决策周期. 默认0.2.
             normalize_observation (bool): 是否输出归一化的观测. 默认True.
             old_gym_style (bool): 是否采用老版gym接口. 默认True.
         """
@@ -179,6 +179,7 @@ class DynamicPathPlanning(gym.Env):
                     self.end_pos = deepcopy(self.state_space.sample()[:2])  # 随机目标位置
                 else:
                     self.end_pos = np.array(fixed_end_pos, dtype=np.float32)  # 固定目标位置
+                self.state = np.array([*self.start_pos[:2], 0.01, 0.0], dtype=np.float32)
             else:
                 self.start_pos = np.array(MAP.start_pos, dtype=np.float32)
                 if fixed_end_pos is None:
@@ -258,28 +259,28 @@ class DynamicPathPlanning(gym.Env):
         center0 = point0[(SCAN_NUM-SCAN_CEN)//2:-(SCAN_NUM-SCAN_CEN)//2]
         point1 = self.deque_points[-1] # 1 当前时刻
         center1 = point1[(SCAN_NUM-SCAN_CEN)//2:-(SCAN_NUM-SCAN_CEN)//2]
-        # 中心区域center障碍变化程度
-        if self.exist_last is None:
-            self.exist_last = np.any(center0>-0.5)
-        exist = np.any(center1>-0.5)
-        if exist:
-            # 一直有障碍：看距离变化
-            if self.exist_last:
-                effective_center0, effective_center1 = center0[center0>-0.5], center1[center1>-0.5] # 不可能是空数组
-                d0_mean = np.mean(effective_center0) + 1e-8  # 平均距离 (障碍整体远离程度)
-                d1_mean = np.mean(effective_center1) + 1e-8
-                d0_min = min(effective_center0) # 最小距离 (是否远离障碍物)
-                d1_min = min(effective_center1)
-                rew += np.clip(d1_mean/d0_mean, 0.2, 2) if d1_min > d0_min else -np.clip(d0_mean/d1_mean, 0.2, 2)
-            # 无障碍 -> 有障碍
-            else:
-                rew -= 0.5
-        else:
-            # 有障碍 -> 无障碍
-            if self.exist_last:
-                rew += 1.0
-            # 一直无障碍, r += 0
-            pass
+        # # 中心区域center障碍变化程度
+        # if self.exist_last is None:
+        #     self.exist_last = np.any(center0>-0.5)
+        # exist = np.any(center1>-0.5)
+        # if exist:
+        #     # 一直有障碍：看距离变化
+        #     if self.exist_last:
+        #         effective_center0, effective_center1 = center0[center0>-0.5], center1[center1>-0.5] # 不可能是空数组
+        #         d0_mean = np.mean(effective_center0) + 1e-8  # 平均距离 (障碍整体远离程度)
+        #         d1_mean = np.mean(effective_center1) + 1e-8
+        #         d0_min = min(effective_center0) # 最小距离 (是否远离障碍物)
+        #         d1_min = min(effective_center1)
+        #         rew += np.clip(d1_mean/d0_mean, 0.2, 2) if d1_min > d0_min else -np.clip(d0_mean/d1_mean, 0.2, 2)
+        #     # 无障碍 -> 有障碍
+        #     else:
+        #         rew -= 0.5
+        # else:
+        #     # 有障碍 -> 无障碍
+        #     if self.exist_last:
+        #         rew += 1.0
+        #     # 一直无障碍, r += 0
+        #     pass
         # 2.被动避障奖励 [-1, 0]
         d_min = min([*point1[point1>-0.5], np.inf])
         if d_min <= D_BUFF:
@@ -318,7 +319,7 @@ class DynamicPathPlanning(gym.Env):
         if V < V_MIN or V > V_MAX or d_min < D_BUFF:
             rew -= 5
         # 更新记忆
-        self.exist_last = deepcopy(exist)
+        # self.exist_last = deepcopy(exist)
         self.D_last = deepcopy(D)
 
         # 输出
@@ -585,6 +586,31 @@ class DynamicPathPlanning(gym.Env):
         if domain == 1 and x > math.pi:
             return x - 2*math.pi           # [0, 2π) -> (-π, π]
         return x
+    
+    @staticmethod
+    def _limit_angle_half_pi(x):
+        """限制角度 x 的区间为 [-π/2, π/2]"""
+        x = x - x // (2 * math.pi) * 2 * math.pi  # 将角度限制到 [0, 2π)
+        if x > math.pi:  # 转换到 (-π, π]
+            x -= 2 * math.pi
+        if x > math.pi / 2:  # 转换到 [-π/2, π/2]
+            return x - math.pi
+        if x < -math.pi / 2:
+            return x + math.pi
+        return x
+
+    @staticmethod
+    def _limit_angle_pi_third(x):
+        """限制角度 x 的区间为 [-π/3, π/3]"""
+        x = x - x // (2 * math.pi) * 2 * math.pi  # 将角度限制到 [0, 2π)
+        if x > math.pi:  # 转换到 (-π, π]
+            x -= 2 * math.pi
+        if x > math.pi / 3:  # 转换到 [-π/3, π/3]
+            return x - 2 * math.pi / 3
+        if x < -math.pi / 3:
+            return x + 2 * math.pi / 3
+        return x
+
 
     @staticmethod
     def _linear_mapping(x, x_min, x_max, left=0.0, right=1.0):  
@@ -631,11 +657,17 @@ class DynamicPathPlanning(gym.Env):
         """
         _, _, V, ψ = s
         nx, μ = u
+
+        if V != 0:
+            μ_new = -9.8 / V * math.tan(μ)
+        else:
+            μ_new = 0  # 或者根据实际情况处理零值的情况
+
         dsdt = [
             V * math.cos(ψ),
             -V * math.sin(ψ),
             9.8 * nx,
-            -9.8/V * math.tan(μ) # μ<90, 不存在inf情况
+            μ_new # μ<90, 不存在inf情况
         ]
         return dsdt
 
@@ -646,6 +678,8 @@ class DynamicPathPlanning(gym.Env):
         x, z, V, ψ = s_new[-1]
         V = np.clip(V, V_LOW, V_HIGH)
         ψ = cls._limit_angle(ψ)
+        # ψ = cls._limit_angle_half_pi(ψ)
+        # ψ = cls._limit_angle_pi_third(ψ)
         return np.array([x, z, V, ψ], dtype=np.float32) # deepcopy
 
     
