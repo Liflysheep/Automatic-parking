@@ -22,7 +22,7 @@ from matplotlib.patches import Rectangle, Polygon
 from shapely.geometry import Point as shp_Point
 from shapely.geometry import Polygon as shp_Polygon
 
-__all__ = ["DynamicPathPlanning", "StaticPathPlanning", "NormalizedActionsWrapper"]
+# __all__ = ["DynamicPathPlanning", "StaticPathPlanning", "NormalizedActionsWrapper"]
 
 
 
@@ -659,7 +659,7 @@ class DynamicPathPlanning(gym.Env):
         nx, μ = u
 
         if V != 0:
-            μ_new = -9.8 / V * math.tan(μ)
+            μ_new = - 9.8/V * math.tan(μ)
         else:
             μ_new = 0  # 或者根据实际情况处理零值的情况
 

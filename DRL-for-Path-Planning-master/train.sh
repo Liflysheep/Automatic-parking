@@ -17,7 +17,7 @@ adaptive_alpha=True
 lr_alpha=1e-3
 alpha_optim_cls="Adam"
 device="cuda"  # or "cpu" based on your setup
-max_episode=20000
+max_episode=50000
 learn_freq=200
 output_freq=200
 

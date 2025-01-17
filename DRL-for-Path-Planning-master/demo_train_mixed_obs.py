@@ -217,7 +217,7 @@ agent = SAC_Agent(
 agent.set_buffer(buffer)
 agent.set_nn(actor, critic)
 agent.cuda()
-# agent.load("./checkpoint") # 加载算法训练进度
+agent.load("./checkpoint") # 加载算法训练进度
 
 
 '''训练LOOP'''
@@ -233,14 +233,14 @@ for episode in range(MAX_EPISODE):
     ## 重置回合奖励
     ep_reward = 0
     ## 获取初始观测
-    if episode <= MAX_EPISODE//2:
-        if episode % OUTPUT_FREQ == 0:
-            obs = env.reset(fixed_end_pos=[0, 0.05])
-        else:
-            obs = env.reset()
-    else:
-        obs = env.reset(fixed_end_pos=[0,0.05])
-    # obs = env.reset(fixed_end_pos=[0, 0.05])
+    # if episode <= MAX_EPISODE//2:
+    #     if episode % 30 == 0:
+    #         obs = env.reset(fixed_end_pos=[0, 0.05])
+    #     else:
+    #         obs = env.reset()
+    # else:
+    #     obs = env.reset(fixed_end_pos=[0,0.05])
+    obs = env.reset(mode=1,fixed_end_pos=[0, 0.05])
     ## 进行一回合仿真
     for steps in range(env.max_episode_steps):
         # 决策
